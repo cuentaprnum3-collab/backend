@@ -1,0 +1,1 @@
+const r=require("express").Router();const c=require("../controllers/admin.controller");const{verificarToken,soloAdmin}=require("../middlewares/auth.middleware");r.use(verificarToken,soloAdmin);r.get("/usuarios",c.listarUsuarios);r.patch("/usuarios/:id/estado",c.cambiarEstadoUsuario);r.get("/stats-globales",c.statsGlobales);module.exports=r;

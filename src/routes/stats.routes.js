@@ -1,0 +1,1 @@
+const r=require("express").Router();const c=require("../controllers/stats.controller");const{verificarToken}=require("../middlewares/auth.middleware");r.use(verificarToken);r.get("/resumen",c.resumen);r.get("/actividad-semanal",c.actividadSemanal);r.get("/frecuencia",c.frecuencia);r.get("/libros-estado",c.librosEstado);r.get("/racha",c.racha);module.exports=r;

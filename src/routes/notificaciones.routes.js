@@ -1,0 +1,1 @@
+const r=require("express").Router();const c=require("../controllers/notificaciones.controller");const{verificarToken}=require("../middlewares/auth.middleware");r.use(verificarToken);r.get("/",c.obtener);r.put("/",c.actualizar);module.exports=r;

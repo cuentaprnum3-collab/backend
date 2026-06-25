@@ -1,0 +1,1 @@
+const r=require("express").Router();const c=require("../controllers/metas.controller");const{verificarToken}=require("../middlewares/auth.middleware");r.use(verificarToken);r.get("/activa",c.metaActiva);r.get("/historial",c.historial);r.post("/",c.crear);module.exports=r;

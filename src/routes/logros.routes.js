@@ -1,0 +1,1 @@
+const r=require("express").Router();const c=require("../controllers/logros.controller");const{verificarToken}=require("../middlewares/auth.middleware");r.use(verificarToken);r.get("/",c.listar);module.exports=r;

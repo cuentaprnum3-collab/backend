@@ -1,0 +1,53 @@
+Instrucciones de configuración de correo para el backend de ReadTrack UTS
+
+1. Copia el ejemplo de variables de entorno
+   - En el directorio `backend/`, copia `.env.example` a `.env`.
+   - Archivo: `backend/.env`
+
+2. Configura el correo en `.env`
+   - MAIL_USER: tu dirección de correo desde la cual enviarás los emails.
+     Ejemplo: `readtrackuts@gmail.com`.
+   - MAIL_PASS: la contraseña o app password del correo.
+     - Si usas Gmail, debes crear una contraseña de aplicación en tu cuenta de Google.
+     - No uses la contraseña normal si tu cuenta tiene verificación en dos pasos.
+
+3. Ajusta el host SMTP sólo si no usas Gmail
+   - Si usas Gmail, no es necesario cambiar nada del `MAIL_HOST` y `MAIL_PORT` porque el código ya usa `smtp.gmail.com:587` por defecto.
+   - Si usas otro proveedor SMTP, define también estas variables:
+     - MAIL_HOST: nombre del servidor SMTP (por ejemplo, `smtp.office365.com` o `smtp.sendgrid.net`).
+     - MAIL_PORT: puerto SMTP (por ejemplo, `587` o `465`).
+     - MAIL_SECURE: `true` si usas TLS/SSL en el puerto 465, `false` si usas STARTTLS en 587.
+
+4. Ejemplo mínimo para Gmail en `.env`
+```
+MAIL_USER="tu_email@gmail.com"
+MAIL_PASS="tu_app_password_generado"
+```
+
+5. Ejemplo si usas otro SMTP
+```
+MAIL_HOST="smtp.tu-proveedor.com"
+MAIL_PORT=587
+MAIL_SECURE=false
+MAIL_USER="tu_email@dominio.com"
+MAIL_PASS="tu_contraseña_o_token"
+```
+
+6. Verifica que tu código use las mismas variables
+   - El backend lee estas variables en `backend/src/utils/email.js`.
+   - Si MAIL_USER o MAIL_PASS no existen, el backend solo "simula" el envío y no mandará correos reales.
+
+7. Pasos que debes hacer tú
+   - Generar o conseguir el correo y la contraseña/`app password`.
+   - Escribir los valores correctos en `backend/.env`.
+   - Si usas Gmail, activar la contraseña de aplicación en tu cuenta Google.
+   - No subir `.env` a ningún repositorio público.
+
+8. Comprueba el envío después de iniciar el servidor
+   - Inicia el backend con `npm run dev`.
+   - Registra un usuario o solicita recuperación de contraseña.
+   - Revisa si llega el correo de verificación o recuperación.
+
+9. Nota importante
+   - El backend usa `tls.rejectUnauthorized = false` para evitar errores de certificados en desarrollo, pero en producción debes usar un SMTP confiable.
+   - Para producción, revisa la seguridad de tu proveedor de correo y usa un token seguro.

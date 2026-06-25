@@ -1,0 +1,206 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Rol {
+  ESTUDIANTE
+  ADMIN
+}
+
+enum EstadoLibro {
+  PENDIENTE
+  LEYENDO
+  TERMINADO
+}
+
+enum TipoLibro {
+  PDF
+  EPUB
+  FISICO
+  OTRO
+}
+
+enum FrecuenciaNotif {
+  DIARIA
+  SEMANAL
+}
+
+model Usuario {
+  id                  Int       @id @default(autoincrement())
+  nombre              String
+  email               String    @unique
+  passwordHash        String
+  emailVerificado     Boolean   @default(false)
+  verificacionCodigo  String?
+  verificacionExpira  DateTime?
+  rol                 Rol       @default(ESTUDIANTE)
+  activo              Boolean   @default(true)
+  aceptaTerminos      Boolean   @default(false)
+  resetToken          String?
+  resetTokenExpira    DateTime?
+  creadoEn            DateTime  @default(now())
+  actualizadoEn       DateTime  @updatedAt
+  materias            Materia[]
+  libros              Libro[]
+  metas               Meta[]
+  racha               Racha?
+  notificacion        Notificacion?
+  logrosUsuario       LogroUsuario[]
+  notas               Nota[]
+  @@map("usuarios")
+}
+
+model Materia {
+  id            Int      @id @default(autoincrement())
+  usuarioId     Int
+  nombre        String
+  descripcion   String?
+  semestre      String?
+  color         String?  @default("#7c2a8e")
+  archivada     Boolean  @default(false)
+  eliminada     Boolean  @default(false)
+  deletedAt     DateTime?
+  esGrupo       Boolean  @default(false)
+  grupoId       String?  @unique
+  propietarioId Int?
+  creadoEn      DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+  usuario       Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  notas         Nota[]
+  miembros      MiembroGrupo[]
+  @@map("materias")
+}
+
+model MiembroGrupo {
+  id        Int      @id @default(autoincrement())
+  materiaId Int
+  usuarioId Int
+  email     String
+  aceptado  Boolean  @default(false)
+  creadoEn  DateTime @default(now())
+  materia   Materia  @relation(fields: [materiaId], references: [id], onDelete: Cascade)
+  @@map("miembros_grupo")
+}
+
+model Nota {
+  id                Int      @id @default(autoincrement())
+  materiaId         Int
+  autorId           Int?
+  texto             String?
+  enlace            String?
+  fechaCumplimiento DateTime?
+  eliminada         Boolean  @default(false)
+  deletedAt         DateTime?
+  creadoEn          DateTime @default(now())
+  actualizadoEn     DateTime @updatedAt
+  materia           Materia  @relation(fields: [materiaId], references: [id], onDelete: Cascade)
+  autor             Usuario? @relation(fields: [autorId], references: [id], onDelete: SetNull)
+  archivos          Archivo[]
+  @@map("notas")
+}
+
+model Archivo {
+  id             Int      @id @default(autoincrement())
+  notaId         Int
+  url            String
+  publicId       String
+  nombreOriginal String
+  tipo           String
+  tamanoBytes    Int?
+  creadoEn       DateTime @default(now())
+  nota           Nota     @relation(fields: [notaId], references: [id], onDelete: Cascade)
+  @@map("archivos")
+}
+
+model Libro {
+  id            Int         @id @default(autoincrement())
+  usuarioId     Int
+  titulo        String
+  autor         String?
+  tipo          TipoLibro   @default(FISICO)
+  totalPaginas  Int
+  paginasLeidas Int         @default(0)
+  portadaUrl    String?
+  estado        EstadoLibro @default(PENDIENTE)
+  eliminada     Boolean     @default(false)
+  deletedAt     DateTime?
+  creadoEn      DateTime    @default(now())
+  actualizadoEn DateTime    @updatedAt
+  usuario       Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  sesiones      Sesion[]
+  @@map("libros")
+}
+
+model Sesion {
+  id              Int      @id @default(autoincrement())
+  libroId         Int
+  paginaInicio    Int
+  paginaFin       Int
+  paginasLeidas   Int
+  duracionMinutos Int?
+  notas           String?
+  fecha           DateTime @default(now())
+  creadoEn        DateTime @default(now())
+  actualizadoEn   DateTime @updatedAt
+  libro           Libro    @relation(fields: [libroId], references: [id], onDelete: Cascade)
+  @@map("sesiones")
+}
+
+model Meta {
+  id            Int      @id @default(autoincrement())
+  usuarioId     Int
+  paginasSemana Int
+  activa        Boolean  @default(true)
+  semanaInicio  DateTime @default(now())
+  creadoEn      DateTime @default(now())
+  usuario       Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  @@map("metas")
+}
+
+model Racha {
+  id            Int       @id @default(autoincrement())
+  usuarioId     Int       @unique
+  rachaActual   Int       @default(0)
+  rachMaxima    Int       @default(0)
+  ultimaSesion  DateTime?
+  actualizadoEn DateTime  @updatedAt
+  usuario       Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  @@map("rachas")
+}
+
+model Notificacion {
+  id           Int             @id @default(autoincrement())
+  usuarioId    Int             @unique
+  activa       Boolean         @default(true)
+  horaEnvio    String?         @default("08:00")
+  frecuencia   FrecuenciaNotif @default(DIARIA)
+  ultimaEnviada DateTime?
+  usuario      Usuario         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  @@map("notificaciones")
+}
+
+model Logro {
+  id            Int            @id @default(autoincrement())
+  nombre        String
+  descripcion   String
+  emoji         String
+  condicion     String
+  usuariosLogro LogroUsuario[]
+  @@map("logros")
+}
+
+model LogroUsuario {
+  id         Int      @id @default(autoincrement())
+  usuarioId  Int
+  logroId    Int
+  obtenidoEn DateTime @default(now())
+  usuario    Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  logro      Logro    @relation(fields: [logroId], references: [id])
+  @@unique([usuarioId, logroId])
+  @@map("logros_usuarios")
+}
