@@ -34,13 +34,19 @@ async function detalle(req, res) {
   }
 }
 
+const TIPOS_LIBRO_VALIDOS = ['PDF', 'EPUB', 'FISICO', 'OTRO'];
+
 async function crear(req, res) {
   try {
     const { titulo, autor, tipo, totalPaginas, portadaUrl, estado } = req.body;
     if (!titulo || !totalPaginas) return err(res, 'Título y total de páginas son obligatorios.');
     if (Number(totalPaginas) < 1) return err(res, 'Total de páginas debe ser mayor a 0.');
+    const tipoFinal = tipo || 'FISICO';
+    if (!TIPOS_LIBRO_VALIDOS.includes(tipoFinal)) {
+      return err(res, `Tipo de libro inválido. Debe ser uno de: ${TIPOS_LIBRO_VALIDOS.join(', ')}.`);
+    }
     const libro = await prisma.libro.create({
-      data: { usuarioId: req.usuario.id, titulo, autor, tipo: tipo || 'FISICO', totalPaginas: Number(totalPaginas), portadaUrl, estado: estado || 'PENDIENTE' },
+      data: { usuarioId: req.usuario.id, titulo, autor, tipo: tipoFinal, totalPaginas: Number(totalPaginas), portadaUrl, estado: estado || 'PENDIENTE' },
     });
     return ok(res, progreso(libro), 201);
   } catch (e) {
@@ -54,6 +60,9 @@ async function actualizar(req, res) {
     const libro = await prisma.libro.findFirst({ where: { id: Number(req.params.id), usuarioId: req.usuario.id } });
     if (!libro) return err(res, 'Libro no encontrado.', 404);
     const { titulo, autor, tipo, totalPaginas, portadaUrl } = req.body;
+    if (tipo && !TIPOS_LIBRO_VALIDOS.includes(tipo)) {
+      return err(res, `Tipo de libro inválido. Debe ser uno de: ${TIPOS_LIBRO_VALIDOS.join(', ')}.`);
+    }
     const actualizado = await prisma.libro.update({
       where: { id: libro.id },
       data: { titulo, autor, tipo, totalPaginas: totalPaginas ? Number(totalPaginas) : undefined, portadaUrl },
@@ -149,4 +158,3 @@ async function restaurar(req, res) {
 }
 
 module.exports = { listar, detalle, crear, actualizar, cambiarEstado, eliminar, restaurar };
-
