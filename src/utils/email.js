@@ -11,13 +11,6 @@ const transporter = nodemailer.createTransport({
   tls: {
     rejectUnauthorized: false,
   },
-  // Timeouts cortos: si el proveedor de hosting bloquea el puerto SMTP
-  // saliente (común en planes gratuitos), preferimos fallar rápido y
-  // avisarle al usuario, en vez de dejarlo esperando varios minutos hasta
-  // que el sistema operativo agote su propio timeout por defecto.
-  connectionTimeout: 8000,
-  greetingTimeout: 8000,
-  socketTimeout: 10000,
 });
 
 async function sendEmail({ to, subject, text, html }) {
