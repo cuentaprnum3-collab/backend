@@ -50,4 +50,4 @@ app.use((err, _req, res, _next) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 ReadTrack UTS API corriendo en http://localhost:${PORT}/api/v1`));
+app.listen(PORT, () => console.log(`🚀 ReadTrack UTS API corriendo en el puerto ${PORT} /api/v1`));
