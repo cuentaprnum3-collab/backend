@@ -11,6 +11,7 @@ const transporter = nodemailer.createTransport({
   host: process.env.MAIL_HOST || 'smtp.gmail.com',
   port: mailPort,
   secure: mailSecure,
+  requireTLS: mailPort === 587,
   auth: {
     user: process.env.MAIL_USER,
     pass: process.env.MAIL_PASS,
@@ -30,7 +31,20 @@ async function sendEmail({ to, subject, text, html }) {
     throw new Error(message);
   }
 
-  await transporter.verify();
+  console.log('[EMAIL] SMTP transport config', {
+    host: process.env.MAIL_HOST || 'smtp.gmail.com',
+    port: mailPort,
+    secure: mailSecure,
+    requireTLS: mailPort === 587,
+    user: process.env.MAIL_USER ? `${process.env.MAIL_USER.replace(/(.)(.*)(@.*)/, '$1***$3')}` : null,
+  });
+
+  try {
+    await transporter.verify();
+  } catch (verifyError) {
+    console.error('[EMAIL] Error en verify SMTP:', verifyError);
+    throw verifyError;
+  }
 
   const info = await transporter.sendMail({
     from: `"ReadTrack UTS" <${process.env.MAIL_USER}>`,
