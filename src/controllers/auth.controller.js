@@ -199,6 +199,8 @@ async function recuperar(req, res) {
     const { email } = req.body;
     if (!email) return err(res, 'El email es obligatorio.');
     const u = await prisma.usuario.findUnique({ where: { email } });
+    if (u && !u.emailVerificado) return err(res, 'Debes verificar tu correo antes de recuperar la contraseña.', 403);
+
     let emailEnviado = false;
     let codigoDev;
     let errorDev;

@@ -15,9 +15,9 @@ const transporter = nodemailer.createTransport({
 
 async function sendEmail({ to, subject, text, html }) {
   if (!process.env.MAIL_USER || !process.env.MAIL_PASS) {
-    console.log('[DEV] Email no enviado. Simulando envío:');
-    console.log({ to, subject, text, html });
-    return;
+    const message = 'No hay configuración SMTP válida. Verifica MAIL_USER y MAIL_PASS.';
+    console.error('[EMAIL] ' + message, { to, subject });
+    throw new Error(message);
   }
 
   await transporter.verify();
