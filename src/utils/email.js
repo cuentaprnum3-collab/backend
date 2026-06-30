@@ -1,67 +1,74 @@
-// Envía correos a través de Gmail SMTP usando Nodemailer.
+// Envía correos a través de la API HTTP de Resend (https://resend.com).
+// IMPORTANTE: Railway bloquea SMTP saliente en los planes Free/Trial/Hobby,
+// por eso usamos la API HTTPS de Resend (puerto 443), que siempre está disponible.
 //
 // Variables de entorno necesarias:
-//   MAIL_USER    -> tu correo de Gmail, ej. "readtrackuts@gmail.com"
-//   MAIL_PASS    -> contraseña de aplicación de Gmail (App Password, 16 caracteres)
-//   MAIL_PORT    -> puerto SMTP, normalmente 465 (SSL) o 587 (TLS)
-//   MAIL_SECURE  -> "true" si usas el puerto 465, "false" si usas 587
-//   MAIL_FROM    -> remitente que verán los usuarios, ej. "ReadTrack UTS <readtrackuts@gmail.com>"
+//   RESEND_API_KEY   -> tu API key de resend.com (empieza con "re_")
+//   MAIL_FROM        -> remitente, ej. "ReadTrack UTS <onboarding@resend.dev>"
 
-const nodemailer = require('nodemailer');
+const https = require('https');
 
-let transporter = null;
-
-function getTransporter() {
-  if (transporter) return transporter;
-
-  if (!process.env.MAIL_USER || !process.env.MAIL_PASS) {
-    return null;
-  }
-
-  transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: Number(process.env.MAIL_PORT) || 465,
-    secure: process.env.MAIL_SECURE !== 'false',
-    family: 4,
-    auth: {
-      user: process.env.MAIL_USER,
-      pass: process.env.MAIL_PASS,
-    },
-    tls: {
-      rejectUnauthorized: false,
-    },
-  });
-
-  transporter.verify((error) => {
-    if (error) {
-      console.error('Error de verificación SMTP:', error.message);
-    } else {
-      console.log('Servidor SMTP (Gmail) listo para enviar correos.');
-    }
-  });
-
-  return transporter;
-}
+const RESEND_API_URL = 'https://api.resend.com/emails';
 
 async function sendEmail({ to, subject, text, html }) {
-  const t = getTransporter();
+  const apiKey = process.env.RESEND_API_KEY;
 
-  if (!t) {
-    console.log('[DEV] Email no enviado (falta MAIL_USER o MAIL_PASS). Simulando envío:');
+  if (!apiKey) {
+    console.log('[DEV] Email no enviado (falta RESEND_API_KEY). Simulando envío:');
     console.log({ to, subject, text, html });
     return;
   }
 
-  const from = process.env.MAIL_FROM || process.env.MAIL_USER;
+  const from = process.env.MAIL_FROM || 'ReadTrack UTS <onboarding@resend.dev>';
+  const payload = JSON.stringify({ from, to: [to], subject, text, html });
 
-  try {
-    const info = await t.sendMail({ from, to, subject, text, html });
-    console.log(`[EMAIL] Enviado a ${to} — Message ID: ${info.messageId}`);
-    return info;
-  } catch (e) {
-    console.error('Error enviando email vía SMTP:', e.message);
-    throw new Error(e.message || 'No se pudo enviar el correo.');
-  }
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      RESEND_API_URL,
+      {
+        method: 'POST',
+        family: 4, // fuerza IPv4 para evitar timeouts de IPv6 en contenedores de Railway
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(payload),
+        },
+        timeout: 15000,
+      },
+      (res) => {
+        let body = '';
+        res.on('data', (chunk) => (body += chunk));
+        res.on('end', () => {
+          let data = {};
+          try {
+            data = JSON.parse(body);
+          } catch (_) {
+            // respuesta no JSON, se deja vacío
+          }
+
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            console.log(`[EMAIL] Enviado a ${to} con ID ${data.id}`);
+            resolve(data);
+          } else {
+            const mensaje = data?.message || `Error HTTP ${res.statusCode} de Resend`;
+            reject(new Error(mensaje));
+          }
+        });
+      }
+    );
+
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('Tiempo de espera agotado al contactar el servicio de correo (Resend).'));
+    });
+
+    req.on('error', (e) => {
+      reject(new Error(e.message || 'Error de red al contactar Resend.'));
+    });
+
+    req.write(payload);
+    req.end();
+  });
 }
 
 function formatVerificationEmail({ nombre, codigo }) {
