@@ -1,59 +1,67 @@
-// Envía correos a través de la API HTTP de Resend (https://resend.com) en
-// vez de SMTP directo. Esto evita el bloqueo de puertos SMTP salientes que
-// algunos proveedores de hosting (como Railway en su plan gratuito) aplican
-// por defecto — la API de Resend funciona sobre HTTPS (puerto 443), que
-// siempre está disponible.
+// Envía correos a través de Gmail SMTP usando Nodemailer.
 //
 // Variables de entorno necesarias:
-//   RESEND_API_KEY   -> tu API key de resend.com (empieza con "re_")
-//   MAIL_FROM        -> remitente, ej. "ReadTrack UTS <onboarding@resend.dev>"
-//                        (onboarding@resend.dev funciona sin verificar dominio)
+//   MAIL_USER    -> tu correo de Gmail, ej. "readtrackuts@gmail.com"
+//   MAIL_PASS    -> contraseña de aplicación de Gmail (App Password, 16 caracteres)
+//   MAIL_PORT    -> puerto SMTP, normalmente 465 (SSL) o 587 (TLS)
+//   MAIL_SECURE  -> "true" si usas el puerto 465, "false" si usas 587
+//   MAIL_FROM    -> remitente que verán los usuarios, ej. "ReadTrack UTS <readtrackuts@gmail.com>"
 
-const RESEND_API_URL = 'https://api.resend.com/emails';
+const nodemailer = require('nodemailer');
+
+let transporter = null;
+
+function getTransporter() {
+  if (transporter) return transporter;
+
+  if (!process.env.MAIL_USER || !process.env.MAIL_PASS) {
+    return null;
+  }
+
+  transporter = nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: Number(process.env.MAIL_PORT) || 465,
+    secure: process.env.MAIL_SECURE !== 'false',
+    family: 4,
+    auth: {
+      user: process.env.MAIL_USER,
+      pass: process.env.MAIL_PASS,
+    },
+    tls: {
+      rejectUnauthorized: false,
+    },
+  });
+
+  transporter.verify((error) => {
+    if (error) {
+      console.error('Error de verificación SMTP:', error.message);
+    } else {
+      console.log('Servidor SMTP (Gmail) listo para enviar correos.');
+    }
+  });
+
+  return transporter;
+}
 
 async function sendEmail({ to, subject, text, html }) {
-  const apiKey = process.env.RESEND_API_KEY;
+  const t = getTransporter();
 
-  if (!apiKey) {
-    console.log('[DEV] Email no enviado (falta RESEND_API_KEY). Simulando envío:');
+  if (!t) {
+    console.log('[DEV] Email no enviado (falta MAIL_USER o MAIL_PASS). Simulando envío:');
     console.log({ to, subject, text, html });
     return;
   }
 
-  const from = process.env.MAIL_FROM || 'ReadTrack UTS <onboarding@resend.dev>';
+  const from = process.env.MAIL_FROM || process.env.MAIL_USER;
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-  let response;
   try {
-    response = await fetch(RESEND_API_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ from, to: [to], subject, text, html }),
-      signal: controller.signal,
-    });
+    const info = await t.sendMail({ from, to, subject, text, html });
+    console.log(`[EMAIL] Enviado a ${to} — Message ID: ${info.messageId}`);
+    return info;
   } catch (e) {
-    if (e.name === 'AbortError') {
-      throw new Error('Tiempo de espera agotado al contactar el servicio de correo (Resend).');
-    }
-    throw e;
-  } finally {
-    clearTimeout(timeoutId);
+    console.error('Error enviando email vía SMTP:', e.message);
+    throw new Error(e.message || 'No se pudo enviar el correo.');
   }
-
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    const mensaje = data?.message || `Error HTTP ${response.status} de Resend`;
-    throw new Error(mensaje);
-  }
-
-  console.log(`[EMAIL] Enviado a ${to} con ID ${data.id}`);
-  return data;
 }
 
 function formatVerificationEmail({ nombre, codigo }) {
