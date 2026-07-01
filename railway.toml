@@ -1,0 +1,4 @@
+[deploy]
+
+[deploy.variables]
+RAILPACK_INSTALL_CMD = "npm ci --legacy-peer-deps"
