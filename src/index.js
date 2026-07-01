@@ -11,9 +11,6 @@ const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173')
   .split(',')
   .map((o) => o.trim());
 
-console.log('🔍 FRONTEND_URL raw:', JSON.stringify(process.env.FRONTEND_URL));
-console.log('🔍 allowedOrigins parsed:', JSON.stringify(allowedOrigins));
-
 app.use((req, res, next) => {
   res.setHeader('Cache-Control', 'no-store');
   next();
