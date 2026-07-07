@@ -1,41 +1,36 @@
-const nodemailer = require('nodemailer');
-
-let transporter = null;
-
-function getTransporter() {
-  if (transporter) return transporter;
-  if (!process.env.MAIL_USER || !process.env.MAIL_PASS) {
-    return null;
-  }
-  transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false,
-    requireTLS: true,
-    family: 4,
-    auth: {
-      user: process.env.MAIL_USER,
-      pass: process.env.MAIL_PASS,
-    },
-    tls: { rejectUnauthorized: false },
-  });
-  transporter.verify((error) => {
-    if (error) console.error('Error SMTP:', error.message);
-    else console.log('SMTP Gmail listo.');
-  });
-  return transporter;
-}
+const RESEND_API_URL = 'https://api.resend.com/emails';
 
 async function sendEmail({ to, subject, text, html }) {
-  const t = getTransporter();
-  if (!t) {
-    console.log('[DEV] Sin MAIL_USER/MAIL_PASS, simulando envío a:', to);
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.log('[DEV] Sin RESEND_API_KEY, simulando envío a:', to);
     return;
   }
-  const from = process.env.MAIL_FROM || process.env.MAIL_USER;
-  const info = await t.sendMail({ from, to, subject, text, html });
-  console.log(`[EMAIL] Enviado a ${to} — ID: ${info.messageId}`);
-  return info;
+  const from = process.env.MAIL_FROM;
+  if (!from) {
+    console.error('Error enviando correo: falta MAIL_FROM en las variables de entorno.');
+    return;
+  }
+
+  const res = await fetch(RESEND_API_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ from, to, subject, text, html }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    const detalle = data?.message || res.statusText;
+    console.error(`Error Resend (${res.status}):`, detalle);
+    throw new Error(`Resend error ${res.status}: ${detalle}`);
+  }
+
+  console.log(`[EMAIL] Enviado a ${to} — ID: ${data.id}`);
+  return data;
 }
 
 function formatVerificationEmail({ nombre, codigo }) {
