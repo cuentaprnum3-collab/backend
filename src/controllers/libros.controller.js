@@ -38,15 +38,28 @@ const TIPOS_LIBRO_VALIDOS = ['PDF', 'EPUB', 'FISICO', 'OTRO'];
 
 async function crear(req, res) {
   try {
-    const { titulo, autor, tipo, totalPaginas, portadaUrl, estado } = req.body;
+    const { titulo, autor, tipo, totalPaginas, portadaUrl, estado, paginasLeidas } = req.body;
     if (!titulo || !totalPaginas) return err(res, 'Título y total de páginas son obligatorios.');
     if (Number(totalPaginas) < 1) return err(res, 'Total de páginas debe ser mayor a 0.');
     const tipoFinal = tipo || 'FISICO';
     if (!TIPOS_LIBRO_VALIDOS.includes(tipoFinal)) {
       return err(res, `Tipo de libro inválido. Debe ser uno de: ${TIPOS_LIBRO_VALIDOS.join(', ')}.`);
     }
+    const estadoFinal = estado || 'PENDIENTE';
+    const totalPaginasNum = Number(totalPaginas);
+
+    // Las paginas leidas al crear dependen del estado: si esta pendiente
+    // siempre es 0, si esta terminado siempre es el total, y si esta
+    // leyendo se usa el valor que indique el usuario (acotado al total).
+    let paginasLeidasFinal = 0;
+    if (estadoFinal === 'TERMINADO') {
+      paginasLeidasFinal = totalPaginasNum;
+    } else if (estadoFinal === 'LEYENDO') {
+      paginasLeidasFinal = Math.max(0, Math.min(totalPaginasNum, Number(paginasLeidas) || 0));
+    }
+
     const libro = await prisma.libro.create({
-      data: { usuarioId: req.usuario.id, titulo, autor, tipo: tipoFinal, totalPaginas: Number(totalPaginas), portadaUrl, estado: estado || 'PENDIENTE' },
+      data: { usuarioId: req.usuario.id, titulo, autor, tipo: tipoFinal, totalPaginas: totalPaginasNum, portadaUrl, estado: estadoFinal, paginasLeidas: paginasLeidasFinal },
     });
     return ok(res, progreso(libro), 201);
   } catch (e) {
