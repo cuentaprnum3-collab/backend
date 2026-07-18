@@ -17,7 +17,7 @@ async function listar(req, res) {
         eliminada: false,
         esGrupo: true,
         usuarioId: { not: req.usuario.id },
-        miembros: { some: { email: req.usuario.email, aceptado: true } },
+        miembros: { some: { email: req.usuario.email.toLowerCase(), aceptado: true } },
       },
       include: { _count:{ select:{ notas:true } }, miembros: true, usuario: { select: { nombre: true } } },
       orderBy: { creadoEn:'desc' },
@@ -31,7 +31,7 @@ async function listar(req, res) {
 async function listarInvitaciones(req, res) {
   try {
     const invitaciones = await prisma.miembroGrupo.findMany({
-      where: { email: req.usuario.email, aceptado: false },
+      where: { email: req.usuario.email.toLowerCase(), aceptado: false },
       include: {
         materia: {
           select: { id: true, nombre: true, color: true, grupoId: true, usuario: { select: { nombre: true, email: true } } },
@@ -50,7 +50,7 @@ async function aceptarInvitacion(req, res) {
   try {
     const miembroId = Number(req.params.miembroId);
     const invitacion = await prisma.miembroGrupo.findFirst({
-      where: { id: miembroId, email: req.usuario.email, aceptado: false },
+      where: { id: miembroId, email: req.usuario.email.toLowerCase(), aceptado: false },
     });
     if (!invitacion) return err(res, 'Invitación no encontrada.', 404);
 
@@ -70,7 +70,7 @@ async function rechazarInvitacion(req, res) {
   try {
     const miembroId = Number(req.params.miembroId);
     const invitacion = await prisma.miembroGrupo.findFirst({
-      where: { id: miembroId, email: req.usuario.email, aceptado: false },
+      where: { id: miembroId, email: req.usuario.email.toLowerCase(), aceptado: false },
     });
     if (!invitacion) return err(res, 'Invitación no encontrada.', 404);
 
@@ -267,7 +267,7 @@ async function unirsaGrupo(req, res) {
     }
 
     const existente = await prisma.miembroGrupo.findFirst({
-      where: { materiaId: materia.id, email: req.usuario.email },
+      where: { materiaId: materia.id, email: req.usuario.email.toLowerCase() },
     });
 
     if (existente) {
@@ -287,7 +287,7 @@ async function unirsaGrupo(req, res) {
       data: {
         materiaId: materia.id,
         usuarioId: req.usuario.id,
-        email: req.usuario.email,
+        email: req.usuario.email.toLowerCase(),
         aceptado: true
       }
     });
@@ -313,7 +313,7 @@ async function salirDeGrupo(req, res) {
     }
 
     const miembro = await prisma.miembroGrupo.findFirst({
-      where: { materiaId, email: req.usuario.email, aceptado: true },
+      where: { materiaId, email: req.usuario.email.toLowerCase(), aceptado: true },
     });
     if (!miembro) return err(res, 'No eres miembro de este grupo.', 404);
 
