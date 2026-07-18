@@ -59,19 +59,69 @@ async function actualizar(req, res) {
   try {
     const libro = await prisma.libro.findFirst({ where: { id: Number(req.params.id), usuarioId: req.usuario.id } });
     if (!libro) return err(res, 'Libro no encontrado.', 404);
-    const { titulo, autor, tipo, totalPaginas, portadaUrl } = req.body;
+    const { titulo, autor, tipo, totalPaginas, portadaUrl, estado } = req.body;
     if (tipo && !TIPOS_LIBRO_VALIDOS.includes(tipo)) {
       return err(res, `Tipo de libro inválido. Debe ser uno de: ${TIPOS_LIBRO_VALIDOS.join(', ')}.`);
     }
-    const actualizado = await prisma.libro.update({
-      where: { id: libro.id },
-      data: { titulo, autor, tipo, totalPaginas: totalPaginas ? Number(totalPaginas) : undefined, portadaUrl },
-    });
+    const estadosValidos = ['PENDIENTE', 'LEYENDO', 'TERMINADO'];
+    if (estado && !estadosValidos.includes(estado)) {
+      return err(res, 'Estado inválido.');
+    }
+
+    let data = { titulo, autor, tipo, totalPaginas: totalPaginas ? Number(totalPaginas) : undefined, portadaUrl };
+
+    if (estado && estado !== libro.estado) {
+      const cambioEstado = await calcularCambioEstado(libro, estado);
+      data = { ...data, ...cambioEstado };
+    }
+
+    const actualizado = await prisma.libro.update({ where: { id: libro.id }, data });
     return ok(res, progreso(actualizado));
   } catch (e) {
     console.error(e);
     return err(res, 'Error al actualizar libro.', 500);
   }
+}
+
+// Calcula los campos a actualizar (y efectos secundarios como crear/borrar
+// sesiones) al pasar un libro de 'libro.estado' a 'estado'. La usan tanto
+// 'actualizar' (Editar libro) como 'cambiarEstado', para que el
+// comportamiento sea siempre el mismo sin importar desde dónde se cambie.
+async function calcularCambioEstado(libro, estado) {
+  const data = { estado };
+
+  if (estado === 'PENDIENTE') {
+    data.paginasLeidas = 0;
+  } else if (estado === 'LEYENDO' && libro.paginasLeidas >= libro.totalPaginas) {
+    data.paginasLeidas = 0;
+  } else if (estado === 'TERMINADO') {
+    if (libro.paginasLeidas < libro.totalPaginas) {
+      const paginasRestantes = libro.totalPaginas - libro.paginasLeidas;
+      if (paginasRestantes > 0) {
+        await prisma.sesion.create({
+          data: {
+            libroId: libro.id,
+            paginaInicio: libro.paginasLeidas,
+            paginaFin: libro.totalPaginas,
+            paginasLeidas: paginasRestantes,
+            fecha: new Date(),
+          },
+        });
+      }
+    }
+    data.paginasLeidas = libro.totalPaginas;
+  }
+
+  // Al salir de TERMINADO (reiniciar), se borran las sesiones anteriores.
+  // Si no se hiciera esto, la siguiente sesión que se registre recalcularía
+  // el progreso tomando en cuenta esas sesiones viejas (que ya llegaban al
+  // 100%) y el libro volvería a marcarse como terminado aunque solo se
+  // hayan leído unas pocas páginas del nuevo ciclo de lectura.
+  if (libro.estado === 'TERMINADO' && estado !== 'TERMINADO') {
+    await prisma.sesion.deleteMany({ where: { libroId: libro.id } });
+  }
+
+  return data;
 }
 
 async function cambiarEstado(req, res) {
@@ -82,33 +132,7 @@ async function cambiarEstado(req, res) {
     const libro = await prisma.libro.findFirst({ where: { id: Number(req.params.id), usuarioId: req.usuario.id } });
     if (!libro) return err(res, 'Libro no encontrado.', 404);
 
-    const data = { estado };
-    const reiniciarLectura = libro.estado === 'TERMINADO' && estado === 'LEYENDO';
-    if (estado === 'PENDIENTE') {
-      data.paginasLeidas = 0;
-    } else if (estado === 'LEYENDO' && libro.paginasLeidas >= libro.totalPaginas) {
-      data.paginasLeidas = 0;
-    } else if (estado === 'TERMINADO') {
-      if (libro.paginasLeidas < libro.totalPaginas) {
-        const paginasRestantes = libro.totalPaginas - libro.paginasLeidas;
-        if (paginasRestantes > 0) {
-          await prisma.sesion.create({
-            data: {
-              libroId: libro.id,
-              paginaInicio: libro.paginasLeidas,
-              paginaFin: libro.totalPaginas,
-              paginasLeidas: paginasRestantes,
-              fecha: new Date(),
-            },
-          });
-        }
-      }
-      data.paginasLeidas = libro.totalPaginas;
-    }
-
-    if (reiniciarLectura) {
-      await prisma.sesion.deleteMany({ where: { libroId: libro.id } });
-    }
+    const data = await calcularCambioEstado(libro, estado);
 
     const actualizado = await prisma.libro.update({ where: { id: libro.id }, data });
     return ok(res, progreso(actualizado));
