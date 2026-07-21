@@ -140,10 +140,15 @@ async function actualizar(req, res) {
     const { nombre, descripcion, semestre, color, esGrupo } = req.body;
     const materia = await prisma.materia.findFirst({ where:{ id:Number(req.params.id), usuarioId:req.usuario.id } });
     if (!materia) return err(res,'Materia no encontrada.',404);
-    
-    // Si se cambio a grupo, generar grupoId
+
+    // Se resuelve el valor final de esGrupo antes de tocar grupoId, para
+    // que si en algún momento se edita la materia sin mandar el campo
+    // esGrupo (undefined), no se borre el grupoId de una materia que
+    // sigue siendo de grupo.
+    const esGrupoFinal = esGrupo !== undefined ? !!esGrupo : materia.esGrupo;
+
     let grupoId = materia.grupoId;
-    if (esGrupo && !materia.esGrupo) {
+    if (esGrupoFinal && !materia.esGrupo) {
       grupoId = `${materia.id}-${req.usuario.id}`;
     }
     
@@ -154,9 +159,9 @@ async function actualizar(req, res) {
         descripcion, 
         semestre, 
         color,
-        esGrupo: esGrupo !== undefined ? !!esGrupo : materia.esGrupo,
-        grupoId: esGrupo ? grupoId : null,
-        propietarioId: esGrupo ? req.usuario.id : null
+        esGrupo: esGrupoFinal,
+        grupoId: esGrupoFinal ? grupoId : null,
+        propietarioId: esGrupoFinal ? req.usuario.id : null
       },
       include: { miembros: true }
     });

@@ -23,7 +23,7 @@ async function obtenerMateriaConAcceso(materiaId, usuario, opciones = {}) {
 
   if (materia.esGrupo) {
     const miembro = await prisma.miembroGrupo.findFirst({
-      where: { materiaId: id, email: usuario.email, aceptado: true },
+      where: { materiaId: id, email: usuario.email.toLowerCase(), aceptado: true },
     });
     if (miembro) {
       return { ...materia, esPropietario: false };

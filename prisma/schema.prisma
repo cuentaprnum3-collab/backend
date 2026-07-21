@@ -23,6 +23,7 @@ enum TipoLibro {
   EPUB
   FISICO
   OTRO
+  DIGITAL
 }
 
 enum FrecuenciaNotif {
