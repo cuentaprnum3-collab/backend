@@ -1,6 +1,23 @@
 const prisma = require('../utils/prisma');
 const { ok, err } = require('../utils/respuesta');
 
+// La racha guardada solo se recalcula cuando el usuario registra una sesion
+// nueva (ver utils/racha.js). Si el usuario deja de leer varios dias y solo
+// entra a ver el Inicio (sin crear ninguna sesion), esta funcion evita que
+// se siga mostrando la racha vieja como si siguiera activa: si la ultima
+// sesion no fue hoy ni ayer, la racha vigente para mostrar es 0 (esto NO
+// modifica lo guardado en la base de datos, solo lo que se muestra; el
+// valor guardado se corrige de verdad la proxima vez que se registre una
+// sesion, en actualizarRacha()).
+function rachaVigente(r) {
+  if (!r || !r.ultimaSesion) return { rachaActual: 0, rachMaxima: r?.rachMaxima || 0 };
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  const ayer = new Date(hoy); ayer.setDate(ayer.getDate() - 1);
+  const ultima = new Date(r.ultimaSesion); ultima.setHours(0, 0, 0, 0);
+  const sigueActiva = ultima.getTime() === hoy.getTime() || ultima.getTime() === ayer.getTime();
+  return { rachaActual: sigueActiva ? r.rachaActual : 0, rachMaxima: r.rachMaxima };
+}
+
 async function resumen(req, res) {
   try {
     const uid = req.usuario.id;
@@ -12,7 +29,8 @@ async function resumen(req, res) {
       prisma.racha.findUnique({ where:{ usuarioId:uid } }),
     ]);
     const paginasTotales = (await prisma.libro.aggregate({ where:{ usuarioId:uid }, _sum:{ paginasLeidas:true } }))._sum.paginasLeidas || 0;
-    return ok(res, { materias, notas, libros, sesiones, paginasTotales, rachaActual:racha?.rachaActual||0, rachMaxima:racha?.rachMaxima||0 });
+    const { rachaActual, rachMaxima } = rachaVigente(racha);
+    return ok(res, { materias, notas, libros, sesiones, paginasTotales, rachaActual, rachMaxima });
   } catch(e) { return err(res,'Error al obtener resumen.',500); }
 }
 
@@ -26,7 +44,7 @@ async function actividadSemanal(req, res) {
       const sesiones = await prisma.sesion.findMany({ where:{ fecha:{ gte:inicio, lte:fin }, libro:{ usuarioId:uid } } });
       for (let d=0; d<7; d++) {
         const dia = new Date(inicio); dia.setDate(dia.getDate()+d);
-        const sesD = sesiones.filter(s=>{ const fd=new Date(s.fecha); return fd.getDate()===dia.getDate()&&fd.getMonth()===dia.getMonth(); });
+        const sesD = sesiones.filter(s=>{ const fd=new Date(s.fecha); return fd.getDate()===dia.getDate()&&fd.getMonth()===dia.getMonth()&&fd.getFullYear()===dia.getFullYear(); });
         resultado.push({ fecha:dia.toISOString().split('T')[0], paginas:sesD.reduce((s,ses)=>s+ses.paginasLeidas,0) });
       }
     }
@@ -66,7 +84,8 @@ async function racha(req, res) {
   try {
     const r = await prisma.racha.findUnique({ where:{ usuarioId:req.usuario.id } });
     if (!r) return ok(res,{ rachaActual:0, rachMaxima:0, ultimaSesion:null });
-    return ok(res,{ rachaActual:r.rachaActual, rachMaxima:r.rachMaxima, ultimaSesion:r.ultimaSesion });
+    const { rachaActual, rachMaxima } = rachaVigente(r);
+    return ok(res,{ rachaActual, rachMaxima, ultimaSesion:r.ultimaSesion });
   } catch(e) { return err(res,'Error al obtener racha.',500); }
 }
 

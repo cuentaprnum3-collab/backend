@@ -12,9 +12,23 @@ function inicioSemana(date = new Date()) {
 
 async function metaActiva(req, res) {
   try {
-    const meta = await prisma.meta.findFirst({ where:{ usuarioId:req.usuario.id, activa:true } });
+    let meta = await prisma.meta.findFirst({ where:{ usuarioId:req.usuario.id, activa:true } });
     if (!meta) return ok(res, null);
-    
+
+    const inicioSemanaActual = inicioSemana();
+
+    // Si la meta activa es de una semana anterior (ya paso su semana), se
+    // renueva automaticamente: se crea una meta nueva para la semana
+    // actual con el mismo objetivo de paginas, para que el usuario no
+    // tenga que entrar manualmente cada semana a "Cambiar meta". La meta
+    // vieja queda intacta en el historial tal como quedo esa semana.
+    if (new Date(meta.semanaInicio).getTime() < inicioSemanaActual.getTime()) {
+      await prisma.meta.update({ where: { id: meta.id }, data: { activa: false } });
+      meta = await prisma.meta.create({
+        data: { usuarioId: req.usuario.id, paginasSemana: meta.paginasSemana, activa: true, semanaInicio: inicioSemanaActual },
+      });
+    }
+
     // Calcular páginas leídas DESDE LA FECHA DE INICIO DE LA META (no desde hoy)
     const inicio = new Date(meta.semanaInicio);
     inicio.setHours(0, 0, 0, 0);
