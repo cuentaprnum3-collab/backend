@@ -45,17 +45,28 @@ async function crear(req, res) {
     if (!TIPOS_LIBRO_VALIDOS.includes(tipoFinal)) {
       return err(res, `Tipo de libro inválido. Debe ser uno de: ${TIPOS_LIBRO_VALIDOS.join(', ')}.`);
     }
-    const estadoFinal = estado || 'PENDIENTE';
+    let estadoFinal = estado || 'PENDIENTE';
     const totalPaginasNum = Number(totalPaginas);
 
     // Las paginas leidas al crear dependen del estado: si esta pendiente
     // siempre es 0, si esta terminado siempre es el total, y si esta
     // leyendo se usa el valor que indique el usuario (acotado al total).
+    // Si el usuario dice estar "leyendo" pero indica una pagina igual o
+    // mayor al total (ej. puso 100 en un libro de 100 paginas), en la
+    // practica ya lo termino: se corrige el estado a TERMINADO para que
+    // no quede guardado como "Leyendo" con 100% de progreso, algo
+    // inconsistente que no deja avanzar bien el resto de la app.
     let paginasLeidasFinal = 0;
     if (estadoFinal === 'TERMINADO') {
       paginasLeidasFinal = totalPaginasNum;
     } else if (estadoFinal === 'LEYENDO') {
-      paginasLeidasFinal = Math.max(0, Math.min(totalPaginasNum, Number(paginasLeidas) || 0));
+      const paginaIndicada = Math.max(0, Number(paginasLeidas) || 0);
+      if (paginaIndicada >= totalPaginasNum) {
+        estadoFinal = 'TERMINADO';
+        paginasLeidasFinal = totalPaginasNum;
+      } else {
+        paginasLeidasFinal = paginaIndicada;
+      }
     }
 
     const libro = await prisma.libro.create({
